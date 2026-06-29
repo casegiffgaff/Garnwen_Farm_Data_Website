@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Garnwen Farm</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Teko:wght@500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    /* ── TOKENS ── */
+    :root {
+      --green-dark:  #1a3a0f;
+      --green-mid:   #2d5a1b;
+      --green-light: #4a8c2a;
+      --green-pale:  #a8d080;
+      --cream:       #f2ede4;
+      --text:        #1a1a18;
+      --text-muted:  #6b7260;
+      --border:      rgba(255,255,255,0.12);
+      --panel-bg:    rgba(20,40,12,0.96);
+      --accent-amber:#d4841a;
+      --accent-red:  #c0392b;
+      --accent-blue: #2471a3;
+      --n-low:       #27ae60;
+      --n-mid:       #e67e22;
+      --n-high:      #c0392b;
+      --field-fill:  rgba(168,208,128,0.25);
+      --field-stroke:#a8d080;
+      --sidebar-w:   56px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: var(--green-dark); color: var(--cream); height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ── HEADER ── */
+    header {
+      background: var(--green-dark);
+      border-bottom: 1px solid var(--border);
+      padding: 0 16px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      z-index: 1000;
+    }
+    .logo { font-family: 'Teko', sans-serif; font-size: 22px; letter-spacing: 0.04em; color: var(--green-pale); line-height: 1; }
+    .logo span { color: var(--cream); font-weight: 600; }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .season-badge {
+      font-size: 11px; font-weight: 500;
+      background: rgba(168,208,128,0.15);
+      border: 1px solid rgba(168,208,128,0.3);
+      color: var(--green-pale);
+      padding: 3px 10px; border-radius: 20px;
+    }
+
+    /* ── LAYOUT ── */
+    .app-body { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── SIDEBAR TOOLBAR ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--green-dark);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 0;
+      gap: 4px;
+      flex-shrink: 0;
+      z-index: 900;
+    }
+    .tool-btn {
+      width: 42px; height: 42px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--green-pale);
+      cursor: pointer;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 2px;
+      transition: all 0.15s;
+      padding: 0;
+    }
+    .tool-btn svg { width: 20px; height: 20px; }
+    .tool-btn .lbl { font-size: 8px; font-weight: 500; letter-spacing: 0.02em; text-align: center; line-height: 1.1; }
+    .tool-btn:hover { background: rgba(168,208,128,0.1); border-color: rgba(168,208,128,0.2); }
+    .tool-btn.active { background: var(--green-mid); border-color: var(--green-pale); color: white; }
+    .tool-divider { width: 28px; height: 1px; background: var(--border); margin: 4px 0; }
+
+    /* ── MAP ── */
+    #map { flex: 1; z-index: 1; }
+    .leaflet-container { background: #1a1a18; }
+
+    /* ── FIELD DETAIL PANEL ── */
+    #field-panel {
+      position: absolute;
+      top: 48px; right: 0;
+      width: 300px;
+      height: calc(100dvh - 48px);
+      background: var(--panel-bg);
+      border-left: 1px solid var(--border);
+      backdrop-filter: blur(8px);
+      z-index: 800;
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #field-panel.open { display: flex; }
+
+    .panel-header {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: flex-start; justify-content: space-between;
+    }
+    .panel-field-name { font-family: 'Teko', sans-serif; font-size: 20px; color: var(--cream); line-height: 1.1; }
+    .panel-subtitle { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .close-btn {
+      background: none; border: none; color: var(--text-muted);
+      cursor: pointer; padding: 2px; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .close-btn:hover { color: var(--cream); }
+
+    .panel-body { flex: 1; overflow-y: auto; padding: 12px 16px; }
+
+    .stat-section { margin-bottom: 14px; }
+    .stat-section-title {
+      font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--text-muted);
+      margin-bottom: 8px; padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+    }
+    .stat-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 5px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-label { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+    .stat-label svg { width: 13px; height: 13px; opacity: 0.7; }
+    .stat-value { font-size: 12px; font-weight: 500; color: var(--cream); }
+    .stat-value.placeholder { color: var(--text-muted); font-style: italic; }
+
+    .n-total-box {
+      background: rgba(168,208,128,0.08);
+      border: 1px solid rgba(168,208,128,0.2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+    }
+    .n-total-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .n-total-value { font-family: 'Teko', sans-serif; font-size: 28px; color: var(--green-pale); line-height: 1; }
+    .n-total-unit { font-size: 11px; color: var(--text-muted); }
+    .n-bar-wrap { margin-top: 6px; background: rgba(255,255,255,0.07); border-radius: 4px; height: 6px; overflow: hidden; }
+    .n-bar { height: 100%; border-radius: 4px; transition: width 0.4s; }
+
+    .panel-actions { padding: 12px 16px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+    .action-btn {
+      padding: 9px 14px; border-radius: 8px; font-size: 12px; font-weight: 500;
+      cursor: pointer; border: 1px solid; display: flex; align-items: center; gap: 8px;
+      transition: all 0.15s;
+    }
+    .action-btn svg { width: 14px; height: 14px; }
+    .action-btn.primary { background: var(--green-mid); border-color: var(--green-light); color: white; }
+    .action-btn.primary:hover { background: var(--green-light); }
+    .action-btn.secondary { background: transparent; border-color: var(--border); color: var(--cream); }
+    .action-btn.secondary:hover { border-color: var(--green-pale); }
+
+    /* ── ADD JOB PANEL ── */
+    #job-panel {
+      position: absolute;
+      top: 48px; right: 0;
+      width: 320px;
+      height: calc(100dvh - 48px);
+      background: var(--panel-bg);
+      border-left: 1px solid var(--border);
+      backdrop-filter: blur(8px);
+      z-index: 800;
+      display: none;
+      flex-direction: column;
+    }
+    #job-panel.open { display: flex; }
+
+    .job-panel-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .job-panel-title { font-family: 'Teko', sans-serif; font-size: 20px; color: var(--cream); }
+    .job-panel-body { flex: 1; overflow-y: auto; padding: 14px 16px; }
+
+    .form-group { margin-bottom: 14px; }
+    .form-label { font-size: 11px; font-weight: 500; color: var(--text-muted); display: block; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .form-control {
+      width: 100%; padding: 8px 10px; font-size: 13px; font-family: 'Inter', sans-serif;
+      background: rgba(255,255,255,0.07); border: 1px solid var(--border);
+      border-radius: 7px; color: var(--cream); appearance: none;
+      transition: border-color 0.15s;
+    }
+    .form-control:focus { outline: none; border-color: var(--green-pale); }
+    .form-control option { background: var(--green-dark); }
+
+    .field-select-hint { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
+    .selected-fields-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; min-height: 28px; }
+    .field-chip {
+      font-size: 10px; font-weight: 500;
+      background: rgba(168,208,128,0.15);
+      border: 1px solid rgba(168,208,128,0.35);
+      color: var(--green-pale);
+      padding: 3px 8px; border-radius: 12px;
+      display: flex; align-items: center; gap: 4px; cursor: pointer;
+    }
+    .field-chip:hover { background: rgba(168,208,128,0.25); }
+
+    .n-preview {
+      background: rgba(168,208,128,0.06);
+      border: 1px solid rgba(168,208,128,0.15);
+      border-radius: 8px; padding: 10px 12px; margin-bottom: 14px;
+    }
+    .n-preview-title { font-size: 10px; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .n-preview-value { font-size: 13px; color: var(--green-pale); font-weight: 500; }
+
+    .job-panel-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
+
+    /* ── N MAP LEGEND ── */
+    #n-legend {
+      position: absolute; bottom: 24px; left: calc(var(--sidebar-w) + 10px);
+      background: var(--panel-bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px;
+      display: none; z-index: 700; backdrop-filter: blur(6px);
+    }
+    #n-legend.visible { display: block; }
+    .legend-title { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 7px; }
+    .legend-row { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; font-size: 11px; color: var(--cream); }
+    .legend-swatch { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+
+    /* ── SEASON TABLE ── */
+    #season-overlay {
+      position: absolute; top: 48px; left: var(--sidebar-w); right: 0; bottom: 0;
+      background: var(--panel-bg); backdrop-filter: blur(8px);
+      z-index: 750; display: none; flex-direction: column; overflow: hidden;
+    }
+    #season-overlay.open { display: flex; }
+    .season-header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .season-title { font-family: 'Teko', sans-serif; font-size: 22px; color: var(--cream); }
+    .season-table-wrap { flex: 1; overflow: auto; padding: 16px 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    td { padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--cream); white-space: nowrap; }
+    tr:hover td { background: rgba(255,255,255,0.03); }
+    .td-n { font-weight: 600; }
+    .td-n.low { color: var(--n-low); }
+    .td-n.mid { color: var(--n-mid); }
+    .td-n.high { color: var(--n-high); }
+    tfoot td { border-top: 1px solid var(--border); font-weight: 600; color: var(--green-pale); }
+
+    /* ── MAP SELECT MODE ── */
+    body.select-mode #map { cursor: crosshair; }
+    .select-mode-banner {
+      position: absolute; top: 8px;
+      left: 50%; transform: translateX(-50%);
+      background: var(--accent-amber); color: white;
+      font-size: 12px; font-weight: 500;
+      padding: 6px 14px; border-radius: 20px; z-index: 700;
+      display: none; white-space: nowrap;
+    }
+    .select-mode-banner.visible { display: block; }
+
+    /* ── CATTLE PANEL ── */
+    #cattle-panel {
+      position: absolute; top: 48px; right: 0;
+      width: 300px; height: calc(100dvh - 48px);
+      background: var(--panel-bg); border-left: 1px solid var(--border);
+      backdrop-filter: blur(8px); z-index: 800;
+      display: none; flex-direction: column;
+    }
+    #cattle-panel.open { display: flex; }
+    .cattle-header { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .cattle-title { font-family: 'Teko', sans-serif; font-size: 20px; color: var(--cream); }
+    .cattle-body { flex: 1; overflow-y: auto; padding: 12px 16px; }
+    .cattle-group-card {
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px; margin-bottom: 10px;
+    }
+    .cattle-group-name { font-size: 13px; font-weight: 600; color: var(--cream); margin-bottom: 4px; }
+    .cattle-group-detail { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+    .cattle-group-actions { display: flex; gap: 6px; }
+    .cattle-btn {
+      font-size: 11px; padding: 4px 10px; border-radius: 6px; cursor: pointer;
+      border: 1px solid var(--border); background: transparent; color: var(--cream);
+    }
+    .cattle-btn:hover { border-color: var(--green-pale); }
+    .add-group-btn {
+      width: 100%; padding: 10px; border: 1px dashed var(--border);
+      border-radius: 10px; background: transparent; color: var(--text-muted);
+      font-size: 12px; cursor: pointer; transition: all 0.15s;
+    }
+    .add-group-btn:hover { border-color: var(--green-pale); color: var(--green-pale); }
+
+    /* ── TOAST ── */
+    #toast {
+      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: var(--green-mid); border: 1px solid var(--green-pale);
+      color: white; font-size: 12px; font-weight: 500;
+      padding: 8px 16px; border-radius: 20px; z-index: 2000;
+      opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">GARNWEN <span>FARM</span></div>
+  <div class="header-right">
+    <div class="season-badge">Season 2025–26</div>
+  </div>
+</header>
+
+<div class="app-body">
+
+  <!-- SIDEBAR TOOLBAR -->
+  <div class="sidebar">
+    <button class="tool-btn" id="btn-addjob" onclick="activateTool('addjob')" title="Add job">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span class="lbl">Add<br>Job</span>
+    </button>
+    <div class="tool-divider"></div>
+    <button class="tool-btn" id="btn-season" onclick="activateTool('season')" title="Season summary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      <span class="lbl">Season</span>
+    </button>
+    <button class="tool-btn" id="btn-nmap" onclick="activateTool('nmap')" title="Nitrogen map">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 19h20L12 2z"/><path d="M12 9v4m0 4h.01"/></svg>
+      <span class="lbl">N Map</span>
+    </button>
+    <div class="tool-divider"></div>
+    <button class="tool-btn" id="btn-cattle" onclick="activateTool('cattle')" title="Cattle groups">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8c0-1.1.9-2 2-2h.5L8 4h8l1.5 2H18a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2V8z"/><circle cx="12" cy="12" r="3"/></svg>
+      <span class="lbl">Cattle</span>
+    </button>
+  </div>
+
+  <!-- MAP -->
+  <div id="map"></div>
+
+  <!-- SELECT MODE BANNER -->
+  <div class="select-mode-banner" id="select-banner">Click fields to select them, then fill in the form →</div>
+
+</div><!-- end app-body -->
+
+<!-- FIELD DETAIL PANEL -->
+<div id="field-panel">
+  <div class="panel-header">
+    <div>
+      <div class="panel-field-name" id="panel-name">Field Name</div>
+      <div class="panel-subtitle" id="panel-area">Area: — ha</div>
+    </div>
+    <button class="close-btn" onclick="closePanel('field')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="panel-body">
+    <!-- N Total -->
+    <div class="n-total-box">
+      <div class="n-total-label">Total N this season</div>
+      <div><span class="n-total-value" id="panel-n-total">0</span> <span class="n-total-unit">kg N/ha</span></div>
+      <div class="n-bar-wrap"><div class="n-bar" id="panel-n-bar" style="width:0%;background:var(--n-low)"></div></div>
+    </div>
+    <!-- Nutrients -->
+    <div class="stat-section">
+      <div class="stat-section-title">Nutrients applied</div>
+      <div class="stat-row">
+        <span class="stat-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"/><path d="M12 8v8m-4-4h8"/></svg>
+          Slurry
+        </span>
+        <span class="stat-value placeholder" id="p-slurry">No data yet</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/></svg>
+          Fertiliser
+        </span>
+        <span class="stat-value placeholder" id="p-fert">No data yet</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8m-4-4v8"/></svg>
+          Manure
+        </span>
+        <span class="stat-value placeholder" id="p-manure">No data yet</span>
+      </div>
+    </div>
+    <!-- Field activity -->
+    <div class="stat-section">
+      <div class="stat-section-title">Field activity</div>
+      <div class="stat-row">
+        <span class="stat-label">Last silage cut</span>
+        <span class="stat-value placeholder" id="p-silage">No data yet</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Last graze</span>
+        <span class="stat-value placeholder" id="p-graze">No data yet</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Days rest</span>
+        <span class="stat-value placeholder" id="p-rest">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Cattle in field</span>
+        <span class="stat-value placeholder" id="p-cattle">None</span>
+      </div>
+    </div>
+  </div>
+  <div class="panel-actions">
+    <button class="action-btn primary" onclick="showJobPanelForField()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Log a job for this field
+    </button>
+    <button class="action-btn secondary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      View job history
+    </button>
+  </div>
+</div>
+
+<!-- ADD JOB PANEL -->
+<div id="job-panel">
+  <div class="job-panel-header">
+    <div class="job-panel-title">Log a Job</div>
+    <button class="close-btn" onclick="closePanel('job')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="job-panel-body">
+    <div class="form-group">
+      <label class="form-label">Job type</label>
+      <select class="form-control" id="job-type" onchange="onJobTypeChange()">
+        <option value="">Select type…</option>
+        <option value="slurry">Slurry</option>
+        <option value="fertiliser">Fertiliser</option>
+        <option value="manure">Manure</option>
+        <option value="silage">Silage cut</option>
+        <option value="graze-in">Grazing — cattle in</option>
+        <option value="graze-out">Grazing — cattle out</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input type="date" class="form-control" id="job-date" />
+    </div>
+    <div class="form-group" id="rate-group" style="display:none">
+      <label class="form-label" id="rate-label">Rate</label>
+      <input type="number" class="form-control" id="job-rate" placeholder="0" step="any" oninput="updateNPreview()" />
+    </div>
+    <div class="form-group" id="cut-group" style="display:none">
+      <label class="form-label">Cut number</label>
+      <select class="form-control" id="job-cut">
+        <option value="1">Cut 1</option>
+        <option value="2">Cut 2</option>
+        <option value="3">Cut 3</option>
+        <option value="4">Cut 4</option>
+      </select>
+    </div>
+    <div class="form-group" id="cattle-group-group" style="display:none">
+      <label class="form-label">Cattle group</label>
+      <select class="form-control" id="job-cattle-group">
+        <option value="">Select group…</option>
+      </select>
+    </div>
+    <div class="n-preview" id="n-preview" style="display:none">
+      <div class="n-preview-title">Estimated N contribution</div>
+      <div class="n-preview-value" id="n-preview-val">—</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Fields <span style="color:var(--accent-amber)">— click map to select</span></label>
+      <div class="selected-fields-list" id="selected-fields-list">
+        <span style="font-size:11px;color:var(--text-muted)">No fields selected yet</span>
+      </div>
+      <div class="field-select-hint">Click fields on the map to add or remove them</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes (optional)</label>
+      <input type="text" class="form-control" id="job-notes" placeholder="Any extra detail…" />
+    </div>
+  </div>
+  <div class="job-panel-footer">
+    <button class="action-btn primary" style="width:100%;justify-content:center" onclick="saveJob()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+      Save to all selected fields
+    </button>
+  </div>
+</div>
+
+<!-- SEASON TABLE OVERLAY -->
+<div id="season-overlay">
+  <div class="season-header">
+    <div class="season-title">Season Summary 2025–26</div>
+    <button class="close-btn" onclick="closePanel('season')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="season-table-wrap">
+    <table id="season-table">
+      <thead>
+        <tr>
+          <th>Field</th>
+          <th>Slurry (gal)</th>
+          <th>Fert N (kg/ha)</th>
+          <th>Manure (t/ha)</th>
+          <th>Silage cuts</th>
+          <th>Graze days</th>
+          <th>Total N (kg/ha)</th>
+        </tr>
+      </thead>
+      <tbody id="season-tbody"></tbody>
+      <tfoot id="season-tfoot"></tfoot>
+    </table>
+  </div>
+</div>
+
+<!-- CATTLE PANEL -->
+<div id="cattle-panel">
+  <div class="cattle-header">
+    <div class="cattle-title">Cattle Groups</div>
+    <button class="close-btn" onclick="closePanel('cattle')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="cattle-body" id="cattle-body">
+    <div id="cattle-groups-list"></div>
+    <button class="add-group-btn" onclick="addCattleGroup()">+ New cattle group</button>
+  </div>
+</div>
+
+<!-- N MAP LEGEND -->
+<div id="n-legend">
+  <div class="legend-title">N applied this season (kg/ha)</div>
+  <div class="legend-row"><div class="legend-swatch" style="background:var(--n-low)"></div>0–80 · Low</div>
+  <div class="legend-row"><div class="legend-swatch" style="background:var(--n-mid)"></div>80–150 · Medium</div>
+  <div class="legend-row"><div class="legend-swatch" style="background:var(--n-high)"></div>150+ · High</div>
+  <div class="legend-row"><div class="legend-swatch" style="background:rgba(255,255,255,0.15)"></div>No data</div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════
+// DATA STORE — will be backed by Google Sheets later
+// ═══════════════════════════════════════════
+
+// N content factors (UK standard approximations)
+const N_FACTORS = {
+  slurry:     0.0013,   // kg N per gallon (cattle slurry ~6 kg N/m³ ≈ 0.027 per gallon... using available N ~50%)
+  fertiliser: 1.0,      // kg N per kg N entered directly
+  manure:     3.0,      // kg N per tonne (FYM available N)
+};
+
+// Field data — keyed by field name
+const fieldData = {};
+
+// Cattle groups
+const cattleGroups = [
+  // { name: 'Milkers A', detail: '80 cows', fieldName: null, movedIn: null }
+];
+
+// ═══════════════════════════════════════════
+// GEOJSON
+// ═══════════════════════════════════════════
+const GEOJSON = {"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.661652,51.931674],[-4.660404,51.933264],[-4.661923,51.934401],[-4.661387,51.93517],[-4.662548,51.936026],[-4.664297,51.934875],[-4.661652,51.931674]]]},"properties":{"name":"Groesffordd Top"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.661387,51.93517,0],[-4.661923,51.934401,0],[-4.660404,51.933264,0],[-4.659811,51.93403,0],[-4.661387,51.93517,0]]]},"properties":{"name":"Groesffordd Old Windmill"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.664386,51.934819,0],[-4.667221,51.932992,0],[-4.66656,51.931764,0],[-4.663041,51.933189,0],[-4.664386,51.934819,0]]]},"properties":{"name":"Groesffordd Big Field"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.662397,51.932373,0],[-4.663041,51.933189,0],[-4.665006,51.932392,0],[-4.664676,51.931821,0],[-4.662397,51.932373,0]]]},"properties":{"name":"Groesffordd Roller"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.666314,51.931348,0],[-4.664676,51.931821,0],[-4.665006,51.932392,0],[-4.66656,51.931764,0],[-4.666314,51.931348,0]]]},"properties":{"name":"Groesffordd Far Ditch"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.665967,51.930746,0],[-4.664275,51.931138,0],[-4.664647,51.93178,0],[-4.666284,51.931302,0],[-4.665967,51.930746,0]]]},"properties":{"name":"Groesffordd Near Ditch"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.662367,51.932318,0],[-4.664647,51.93178,0],[-4.664275,51.931138,0],[-4.661868,51.931719,0],[-4.662367,51.932318,0]]]},"properties":{"name":"Groesffordd Dogleg"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.665678,51.930246,0],[-4.663683,51.93063,0],[-4.663873,51.931237,0],[-4.665967,51.930746,0],[-4.665678,51.930246,0]]]},"properties":{"name":"Groesffrodd Spider"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.663297,51.930076,0],[-4.662889,51.930164,0],[-4.661746,51.931557,0],[-4.661868,51.931719,0],[-4.663873,51.931237,0],[-4.663683,51.93063,0],[-4.66358,51.930634,0],[-4.663587,51.930295,0],[-4.663328,51.930213,0],[-4.663297,51.930076,0]]]},"properties":{"name":"Groesffordd Triangle"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.655388,51.932147,0],[-4.654627,51.932992,0],[-4.654165,51.933551,0],[-4.654256,51.933673,0],[-4.654458,51.93376,0],[-4.655235,51.934026,0],[-4.656539,51.934397,0],[-4.657043,51.933924,0],[-4.657544,51.934114,0],[-4.658574,51.934603,0],[-4.658971,51.934812,0],[-4.659523,51.934117,0],[-4.655388,51.932147,0]]]},"properties":{"name":"Top Big Silage"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.656356,51.931085,0],[-4.655388,51.932147,0],[-4.659523,51.934117,0],[-4.66035,51.933073,0],[-4.660012,51.932982,0],[-4.658355,51.932074,0],[-4.656356,51.931085,0]]]},"properties":{"name":"Second Big Silage"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.660587,51.931186,0],[-4.660024,51.931867,0],[-4.659441,51.932621,0],[-4.660174,51.932981,0],[-4.660372,51.933018,0],[-4.661574,51.931516,0],[-4.660587,51.931186,0]]]},"properties":{"name":"Second Road Bumpy"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.662258,51.930646,0],[-4.661279,51.930262,0],[-4.660587,51.931186,0],[-4.661574,51.931516,0],[-4.662258,51.930646,0]]]},"properties":{"name":"First Road Field"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.660014,51.931876,0],[-4.658937,51.93129,0],[-4.658385,51.932038,0],[-4.658479,51.9321,0],[-4.658522,51.932123,0],[-4.659441,51.932621,0],[-4.660014,51.931876,0]]]},"properties":{"name":"Small Square"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.658355,51.932074,0],[-4.658385,51.932038,0],[-4.658937,51.93129,0],[-4.660024,51.931867,0],[-4.660587,51.931186,0],[-4.661279,51.930262,0],[-4.65972,51.929613,0],[-4.657639,51.930562,0],[-4.658003,51.930751,0],[-4.656598,51.931199,0],[-4.658355,51.932074,0]]]},"properties":{"name":"Rough"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.662861,51.929872,0],[-4.662229,51.929526,0],[-4.661913,51.929349,0],[-4.661296,51.928779,0],[-4.660658,51.928851,0],[-4.660127,51.928901,0],[-4.658882,51.928813,0],[-4.658138,51.928741,0],[-4.65784,51.928737,0],[-4.657818,51.928779,0],[-4.65972,51.929613,0],[-4.661279,51.930262,0],[-4.662258,51.930646,0],[-4.662861,51.929872,0]]]},"properties":{"name":"Opposite Lan Lane"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.663168,51.928549,0],[-4.661634,51.928732,0],[-4.661825,51.928972,0],[-4.66205,51.929137,0],[-4.662278,51.929222,0],[-4.662594,51.92925,0],[-4.662887,51.929258,0],[-4.66308,51.929203,0],[-4.66323,51.929117,0],[-4.663294,51.929028,0],[-4.663284,51.928891,0],[-4.663168,51.928549,0]]]},"properties":{"name":"Bowser's"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.663127,51.927623,0],[-4.663071,51.927569,0],[-4.662915,51.927464,0],[-4.662694,51.927182,0],[-4.662409,51.926822,0],[-4.661889,51.926163,0],[-4.66176,51.926105,0],[-4.660668,51.926424,0],[-4.6604,51.926496,0],[-4.660303,51.926607,0],[-4.65996,51.926557,0],[-4.659938,51.926744,0],[-4.660303,51.926852,0],[-4.66085,51.927212,0],[-4.661623,51.927686,0],[-4.662302,51.928066,0],[-4.663127,51.927623,0]]]},"properties":{"name":"Back Field"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.657639,51.930562,0],[-4.65972,51.929613,0],[-4.657818,51.928779,0],[-4.657701,51.928748,0],[-4.657445,51.928604,0],[-4.657139,51.928106,0],[-4.656927,51.927921,0],[-4.656803,51.927908,0],[-4.656583,51.927778,0],[-4.65632,51.927534,0],[-4.655728,51.927004,0],[-4.655232,51.926488,0],[-4.655156,51.926301,0],[-4.654328,51.926463,0],[-4.654457,51.926842,0],[-4.65451,51.927338,0],[-4.654354,51.927754,0],[-4.654649,51.928261,0],[-4.655438,51.928975,0],[-4.655532,51.92901,0],[-4.655776,51.928921,0],[-4.656476,51.928735,0],[-4.656894,51.928658,0],[-4.657445,51.928604,0],[-4.657701,51.928748,0],[-4.657818,51.928779,0],[-4.658882,51.928813,0],[-4.658692,51.930078,0],[-4.65842,51.929603,0],[-4.657934,51.929459,0],[-4.656617,51.929911,0],[-4.656059,51.929542,0],[-4.656086,51.929069,0],[-4.656537,51.92891,0],[-4.657701,51.928748,0],[-4.657639,51.930562,0]]]},"properties":{"name":"Above Lan"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.657443,51.925812,0],[-4.657068,51.926219,0],[-4.656746,51.926562,0],[-4.657015,51.926771,0],[-4.657403,51.92714,0],[-4.657136,51.927249,0],[-4.65632,51.927534,0],[-4.656583,51.927778,0],[-4.656803,51.927908,0],[-4.656927,51.927921,0],[-4.657139,51.928106,0],[-4.657445,51.928604,0],[-4.656894,51.928658,0],[-4.656476,51.928735,0],[-4.655776,51.928921,0],[-4.655532,51.92901,0],[-4.655438,51.928975,0],[-4.654649,51.928261,0],[-4.654354,51.927754,0],[-4.65451,51.927338,0],[-4.654457,51.926842,0],[-4.654328,51.926463,0],[-4.654202,51.926625,0],[-4.652914,51.92749,0],[-4.652835,51.92751,0],[-4.652567,51.927394,0],[-4.652079,51.927209,0],[-4.652352,51.926915,0],[-4.652162,51.927121,0],[-4.651994,51.926997,0],[-4.652138,51.926845,0],[-4.651167,51.926719,0],[-4.651556,51.926377,0],[-4.652087,51.926,0],[-4.653024,51.925569,0],[-4.653086,51.92547,0],[-4.653773,51.925231,0],[-4.654074,51.92538,0],[-4.654328,51.925626,0],[-4.654513,51.925776,0],[-4.654795,51.925829,0],[-4.655015,51.92473,0],[-4.654522,51.92432,0],[-4.654838,51.924118,0],[-4.655568,51.924071,0],[-4.656931,51.923856,0],[-4.656941,51.924439,0],[-4.657059,51.924882,0],[-4.65677,51.924902,0],[-4.656555,51.924819,0],[-4.655772,51.924859,0],[-4.655402,51.924899,0],[-4.655015,51.92473,0],[-4.654795,51.925829,0],[-4.655265,51.925891,0],[-4.655728,51.926083,0],[-4.65588,51.926075,0],[-4.656137,51.926111,0],[-4.656362,51.926508,0],[-4.656627,51.926439,0],[-4.656746,51.926562,0],[-4.657068,51.926219,0],[-4.657443,51.925812,0]]]},"properties":{"name":"Mushroom Field"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.659614,51.925443,0],[-4.65956,51.925539,0],[-4.658782,51.925522,0],[-4.658978,51.924145,0],[-4.66076,51.924709,0],[-4.660695,51.925614,0],[-4.659614,51.925443,0]]]},"properties":{"name":"Caravan Top"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.661795,51.92509,0],[-4.66179,51.924537,0],[-4.663249,51.924617,0],[-4.66363,51.925063,0],[-4.664938,51.924792,0],[-4.665013,51.924957,0],[-4.66512,51.925543,0],[-4.665249,51.925685,0],[-4.665421,51.926264,0],[-4.665775,51.927011,0],[-4.66467,51.927143,0],[-4.664434,51.926635,0],[-4.664241,51.926714,0],[-4.663699,51.925606,0],[-4.663066,51.927365,0],[-4.662847,51.927112,0],[-4.661967,51.92599,0],[-4.661854,51.925725,0],[-4.661795,51.92509,0]]]},"properties":{"name":"Caravan Bottom"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.657443,51.925812,0],[-4.657068,51.926219,0],[-4.656746,51.926562,0],[-4.656627,51.926439,0],[-4.656362,51.926508,0],[-4.656137,51.926111,0],[-4.65588,51.926075,0],[-4.655728,51.926083,0],[-4.655265,51.925891,0],[-4.654795,51.925829,0],[-4.654513,51.925776,0],[-4.654328,51.925626,0],[-4.654074,51.92538,0],[-4.653773,51.925231,0],[-4.653872,51.92539,0],[-4.653968,51.925487,0],[-4.653995,51.925634,0],[-4.653994,51.925883,0],[-4.65406,51.926165,0],[-4.654008,51.926341,0],[-4.654019,51.926426,0],[-4.654114,51.926499,0],[-4.654252,51.926526,0],[-4.654319,51.926572,0],[-4.654202,51.926625,0],[-4.654328,51.926463,0],[-4.654457,51.926842,0],[-4.65451,51.927338,0],[-4.655728,51.927004,0],[-4.655232,51.926488,0],[-4.655156,51.926301,0],[-4.654328,51.926463,0],[-4.654202,51.926625,0],[-4.652914,51.92749,0],[-4.652835,51.92751,0],[-4.652852,51.92761,0],[-4.652999,51.927615,0],[-4.653782,51.92794,0],[-4.65449,51.928268,0],[-4.654941,51.928635,0],[-4.655327,51.929035,0],[-4.65454,51.929083,0],[-4.653966,51.92907,0],[-4.65336,51.929298,0],[-4.652823,51.929649,0],[-4.652033,51.929344,0],[-4.652355,51.928996,0],[-4.65213,51.92893,0],[-4.652355,51.928659,0],[-4.651864,51.928518,0],[-4.652231,51.928122,0],[-4.652852,51.92761,0],[-4.651167,51.926719,0],[-4.651556,51.926377,0],[-4.652087,51.926,0],[-4.653024,51.925569,0],[-4.653086,51.92547,0],[-4.653773,51.925231,0],[-4.657443,51.925812,0]]]},"properties":{"name":"Bramble Field"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.660303,51.926607,0],[-4.659938,51.926744,0],[-4.65996,51.926557,0],[-4.660303,51.926607,0]]]},"properties":{"name":"Below Lan"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.66076,51.924709,0],[-4.660695,51.925614,0],[-4.659614,51.925443,0],[-4.65956,51.925539,0],[-4.658782,51.925522,0],[-4.658978,51.924145,0],[-4.660695,51.924791,0],[-4.66076,51.924709,0]]]},"properties":{"name":"Top Reseed"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.661795,51.92509,0],[-4.661854,51.925725,0],[-4.661967,51.92599,0],[-4.662847,51.927112,0],[-4.663066,51.927365,0],[-4.663222,51.927489,0],[-4.663649,51.927735,0],[-4.663995,51.927899,0],[-4.664341,51.928097,0],[-4.665051,51.927983,0],[-4.665775,51.927011,0],[-4.66467,51.927143,0],[-4.664434,51.926635,0],[-4.664241,51.926714,0],[-4.663699,51.925606,0],[-4.66363,51.925063,0],[-4.663249,51.924617,0],[-4.66179,51.924537,0],[-4.661795,51.92509,0]]]},"properties":{"name":"Pump Field"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.658978,51.924145,0],[-4.658782,51.925522,0],[-4.65956,51.925539,0],[-4.659614,51.925443,0],[-4.660695,51.925614,0],[-4.660695,51.924791,0],[-4.658978,51.924145,0]]]},"properties":{"name":"Neville's Windmill"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.658922,51.923966,0],[-4.657267,51.923716,0],[-4.657197,51.923715,0],[-4.657275,51.924525,0],[-4.65812,51.924576,0],[-4.658415,51.924659,0],[-4.658922,51.923966,0]]]},"properties":{"name":"Cottage Field"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.656931,51.923856,0],[-4.655568,51.924071,0],[-4.654838,51.924118,0],[-4.654522,51.92432,0],[-4.655015,51.92473,0],[-4.655402,51.924899,0],[-4.655772,51.924859,0],[-4.656555,51.924819,0],[-4.65677,51.924902,0],[-4.657059,51.924882,0],[-4.656941,51.924439,0],[-4.656931,51.923856,0]]]},"properties":{"name":"Below Cottage"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.655728,51.927004,0],[-4.65451,51.927338,0],[-4.654354,51.927754,0],[-4.654649,51.928261,0],[-4.655438,51.928975,0],[-4.655532,51.92901,0],[-4.655776,51.928921,0],[-4.656476,51.928735,0],[-4.656894,51.928658,0],[-4.657445,51.928604,0],[-4.657139,51.928106,0],[-4.656927,51.927921,0],[-4.656803,51.927908,0],[-4.656583,51.927778,0],[-4.65632,51.927534,0],[-4.655728,51.927004,0]]]},"properties":{"name":"Corner Field"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.655156,51.926301,0],[-4.655232,51.926488,0],[-4.655728,51.927004,0],[-4.65632,51.927534,0],[-4.657136,51.927249,0],[-4.657403,51.92714,0],[-4.657015,51.926771,0],[-4.656746,51.926562,0],[-4.656627,51.926439,0],[-4.656362,51.926508,0],[-4.656137,51.926111,0],[-4.65588,51.926075,0],[-4.655156,51.926301,0]]]},"properties":{"name":"Tadpole Field"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.654328,51.926463,0],[-4.654457,51.926842,0],[-4.65451,51.927338,0],[-4.655728,51.927004,0],[-4.655232,51.926488,0],[-4.655156,51.926301,0],[-4.654328,51.926463,0]]]},"properties":{"name":"Old Oak"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.652914,51.92749,0],[-4.653904,51.927879,0],[-4.654387,51.928114,0],[-4.654548,51.928086,0],[-4.654354,51.927754,0],[-4.65451,51.927338,0],[-4.654457,51.926842,0],[-4.65439,51.926649,0],[-4.654202,51.926625,0],[-4.652914,51.92749,0]]]},"properties":{"name":"Triangle"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.653994,51.925883,0],[-4.653473,51.926068,0],[-4.652856,51.926485,0],[-4.652878,51.926584,0],[-4.652352,51.926915,0],[-4.652079,51.927209,0],[-4.652567,51.927394,0],[-4.652835,51.92751,0],[-4.652914,51.92749,0],[-4.654202,51.926625,0],[-4.654319,51.926572,0],[-4.654252,51.926526,0],[-4.654114,51.926499,0],[-4.654019,51.926426,0],[-4.654008,51.926341,0],[-4.65406,51.926165,0],[-4.654082,51.926024,0],[-4.653994,51.925883,0]]]},"properties":{"name":"Bottom FIeld 1"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.653773,51.925231,0],[-4.653086,51.92547,0],[-4.653024,51.925569,0],[-4.652087,51.926,0],[-4.651556,51.926377,0],[-4.651167,51.926719,0],[-4.652138,51.926845,0],[-4.651994,51.926997,0],[-4.652162,51.927121,0],[-4.652352,51.926915,0],[-4.652878,51.926584,0],[-4.652856,51.926485,0],[-4.653473,51.926068,0],[-4.653994,51.925883,0],[-4.653995,51.925634,0],[-4.653968,51.925487,0],[-4.653872,51.92539,0],[-4.653773,51.925231,0]]]},"properties":{"name":"Bottom FIeld 2"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.665051,51.927983,0],[-4.664434,51.926635,0],[-4.664241,51.926714,0],[-4.663699,51.925606,0],[-4.66363,51.925063,0],[-4.663249,51.924617,0],[-4.66179,51.924537,0],[-4.661795,51.92509,0],[-4.661854,51.925725,0],[-4.661967,51.92599,0],[-4.662847,51.927112,0],[-4.663066,51.927365,0],[-4.663222,51.927489,0],[-4.663649,51.927735,0],[-4.663995,51.927899,0],[-4.664341,51.928097,0],[-4.665051,51.927983,0]]]},"properties":{"name":"Hen Field"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.665775,51.927011,0],[-4.665421,51.926264,0],[-4.665249,51.925685,0],[-4.66512,51.925543,0],[-4.665013,51.924957,0],[-4.664938,51.924792,0],[-4.66363,51.925063,0],[-4.663699,51.925606,0],[-4.664241,51.926714,0],[-4.664434,51.926635,0],[-4.66467,51.927143,0],[-4.665775,51.927011,0]]]},"properties":{"name":"Quarry Field"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.658692,51.930078,0],[-4.65972,51.929613,0],[-4.657818,51.928779,0],[-4.657701,51.928748,0],[-4.656537,51.92891,0],[-4.656086,51.929069,0],[-4.656059,51.929542,0],[-4.656617,51.929911,0],[-4.657934,51.929459,0],[-4.65842,51.929603,0],[-4.658692,51.930078,0]]]},"properties":{"name":"Export (Ietwen Quarry)"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.655327,51.929035,0],[-4.654941,51.928635,0],[-4.65449,51.928268,0],[-4.653782,51.92794,0],[-4.652999,51.927615,0],[-4.652852,51.92761,0],[-4.652231,51.928122,0],[-4.651864,51.928518,0],[-4.652355,51.928659,0],[-4.65213,51.92893,0],[-4.652355,51.928996,0],[-4.652033,51.929344,0],[-4.652823,51.929649,0],[-4.65336,51.929298,0],[-4.653966,51.92907,0],[-4.65454,51.929083,0],[-4.655327,51.929035,0]]]},"properties":{"name":"Export (Ietwen Top)"}},{"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[-4.652694,51.927572,0],[-4.651815,51.927218,0],[-4.650935,51.927284,0],[-4.650291,51.92737,0],[-4.649803,51.927377,0],[-4.649631,51.927466,0],[-4.649047,51.928151,0],[-4.649079,51.928213,0],[-4.649835,51.928468,0],[-4.649975,51.928442,0],[-4.650162,51.928455,0],[-4.650506,51.928577,0],[-4.650592,51.928511,0],[-4.650838,51.928571,0],[-4.651037,51.928643,0],[-4.65123,51.928686,0],[-4.651375,51.928485,0],[-4.651493,51.928455,0],[-4.6516,51.928485,0],[-4.651729,51.928538,0],[-4.651976,51.928223,0],[-4.652179,51.928018,0],[-4.652507,51.927747,0],[-4.652694,51.927572,0]]]},"properties":{"name":"Export (Ietwen Bottom)"}}]};
+
+// ═══════════════════════════════════════════
+// MAP SETUP
+// ═══════════════════════════════════════════
+const map = L.map('map', { zoomControl: true }).setView([51.929, -4.658], 14);
+
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  attribution: 'Imagery &copy; Esri',
+  maxZoom: 19
+}).addTo(map);
+
+// Layer for field labels
+const labelLayer = L.layerGroup().addTo(map);
+
+// Track layers
+const fieldLayers = {}; // name → L.polygon
+let currentTool = null;
+let selectedFieldName = null;
+let jobSelectedFields = new Set();
+let nMapActive = false;
+
+function getDefaultStyle() {
+  return { color: '#a8d080', weight: 2, fillColor: '#a8d080', fillOpacity: 0.18, opacity: 0.9 };
+}
+function getHoverStyle() {
+  return { fillOpacity: 0.38, weight: 2.5 };
+}
+function getSelectedStyle() {
+  return { color: '#fff', weight: 2.5, fillColor: '#fff', fillOpacity: 0.3 };
+}
+function getNStyle(nVal) {
+  if (nVal === 0) return { fillColor: 'rgba(255,255,255,0.12)', fillOpacity: 0.25 };
+  if (nVal < 80)  return { fillColor: '#27ae60', fillOpacity: 0.55 };
+  if (nVal < 150) return { fillColor: '#e67e22', fillOpacity: 0.55 };
+  return { fillColor: '#c0392b', fillOpacity: 0.55 };
+}
+
+GEOJSON.features.forEach(f => {
+  const name = f.properties.name;
+  if (!fieldData[name]) fieldData[name] = { slurry: [], fertiliser: [], manure: [], silage: [], graze: [], cattle: null };
+
+  const poly = L.geoJSON(f, {
+    style: getDefaultStyle()
+  }).addTo(map);
+
+  // Add field name label
+  const center = poly.getBounds().getCenter();
+  const label = L.marker(center, {
+    icon: L.divIcon({
+      className: '',
+      html: `<div style="font-size:9px;font-family:Inter,sans-serif;font-weight:500;color:#fff;text-shadow:0 0 4px rgba(0,0,0,0.9),0 0 8px rgba(0,0,0,0.7);text-align:center;white-space:nowrap;pointer-events:none">${name}</div>`,
+      iconAnchor: [50, 6],
+      iconSize: [100, 12]
+    }),
+    interactive: false
+  }).addTo(labelLayer);
+
+  poly.on('mouseover', () => {
+    if (!jobSelectedFields.has(name)) poly.setStyle(getHoverStyle());
+  });
+  poly.on('mouseout', () => {
+    if (!jobSelectedFields.has(name) && selectedFieldName !== name) {
+      if (nMapActive) applyNStyle(name);
+      else poly.setStyle(getDefaultStyle());
+    }
+  });
+  poly.on('click', () => onFieldClick(name));
+
+  fieldLayers[name] = poly;
+});
+
+function applyNStyle(name) {
+  const d = fieldData[name];
+  const n = calcTotalN(name);
+  fieldLayers[name].setStyle({ ...getDefaultStyle(), ...getNStyle(n) });
+}
+
+// ═══════════════════════════════════════════
+// TOOL ACTIVATION
+// ═══════════════════════════════════════════
+function activateTool(tool) {
+  // Toggle off if already active
+  if (currentTool === tool) {
+    deactivateAll();
+    return;
+  }
+  deactivateAll();
+  currentTool = tool;
+  document.getElementById('btn-' + (tool === 'addjob' ? 'addjob' : tool === 'nmap' ? 'nmap' : tool === 'season' ? 'season' : 'cattle')).classList.add('active');
+
+  if (tool === 'addjob') {
+    document.getElementById('job-panel').classList.add('open');
+    document.getElementById('select-banner').classList.add('visible');
+    document.body.classList.add('select-mode');
+    document.getElementById('job-date').valueAsDate = new Date();
+  } else if (tool === 'season') {
+    buildSeasonTable();
+    document.getElementById('season-overlay').classList.add('open');
+  } else if (tool === 'nmap') {
+    nMapActive = true;
+    document.getElementById('n-legend').classList.add('visible');
+    Object.keys(fieldLayers).forEach(applyNStyle);
+  } else if (tool === 'cattle') {
+    renderCattlePanel();
+    document.getElementById('cattle-panel').classList.add('open');
+  }
+}
+
+function deactivateAll() {
+  currentTool = null;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('job-panel').classList.remove('open');
+  document.getElementById('season-overlay').classList.remove('open');
+  document.getElementById('cattle-panel').classList.remove('open');
+  document.getElementById('select-banner').classList.remove('visible');
+  document.body.classList.remove('select-mode');
+  if (nMapActive) {
+    nMapActive = false;
+    document.getElementById('n-legend').classList.remove('visible');
+    Object.keys(fieldLayers).forEach(n => fieldLayers[n].setStyle(getDefaultStyle()));
+  }
+  clearJobSelections();
+}
+
+// ═══════════════════════════════════════════
+// FIELD CLICK
+// ═══════════════════════════════════════════
+function onFieldClick(name) {
+  if (currentTool === 'addjob') {
+    toggleJobField(name);
+  } else {
+    openFieldPanel(name);
+  }
+}
+
+// ═══════════════════════════════════════════
+// FIELD DETAIL PANEL
+// ═══════════════════════════════════════════
+function openFieldPanel(name) {
+  selectedFieldName = name;
+  const d = fieldData[name];
+  document.getElementById('panel-name').textContent = name;
+
+  // Nutrients
+  const slurryTotal = d.slurry.reduce((s, j) => s + j.gallons, 0);
+  const fertTotal   = d.fertiliser.reduce((s, j) => s + j.kgNha, 0);
+  const manureTotal = d.manure.reduce((s, j) => s + j.tha, 0);
+
+  setText('p-slurry', slurryTotal ? `${slurryTotal.toLocaleString()} gal` : null);
+  setText('p-fert',   fertTotal   ? `${fertTotal} kg N/ha` : null);
+  setText('p-manure', manureTotal ? `${manureTotal} t/ha` : null);
+
+  // Silage
+  const lastSilage = d.silage.length ? d.silage[d.silage.length-1] : null;
+  setText('p-silage', lastSilage ? `Cut ${lastSilage.cut} — ${fmtDate(lastSilage.date)}` : null);
+
+  // Graze
+  const lastGraze = d.graze.filter(g => g.type === 'in').pop();
+  const lastOut   = d.graze.filter(g => g.type === 'out').pop();
+  setText('p-graze', lastGraze ? `In: ${fmtDate(lastGraze.date)}` + (lastOut ? `, Out: ${fmtDate(lastOut.date)}` : ' (still in)') : null);
+
+  // Days rest
+  if (lastOut) {
+    const days = Math.floor((Date.now() - new Date(lastOut.date)) / 86400000);
+    document.getElementById('p-rest').textContent = `${days} days`;
+    document.getElementById('p-rest').classList.remove('placeholder');
+  } else {
+    setText('p-rest', null, '—');
+  }
+
+  // Cattle
+  const group = cattleGroups.find(g => g.fieldName === name);
+  if (group) {
+    const days = Math.floor((Date.now() - new Date(group.movedIn)) / 86400000);
+    document.getElementById('p-cattle').textContent = `${group.name} (${days}d)`;
+    document.getElementById('p-cattle').classList.remove('placeholder');
+  } else {
+    setText('p-cattle', null, 'None');
+  }
+
+  // N total
+  const n = calcTotalN(name);
+  document.getElementById('panel-n-total').textContent = n.toFixed(0);
+  const pct = Math.min(n / 250 * 100, 100);
+  const bar = document.getElementById('panel-n-bar');
+  bar.style.width = pct + '%';
+  bar.style.background = n < 80 ? 'var(--n-low)' : n < 150 ? 'var(--n-mid)' : 'var(--n-high)';
+
+  closePanel('job'); closePanel('cattle');
+  document.getElementById('field-panel').classList.add('open');
+}
+
+function setText(id, value, fallback) {
+  const el = document.getElementById(id);
+  if (value) {
+    el.textContent = value;
+    el.classList.remove('placeholder');
+  } else {
+    el.textContent = fallback || 'No data yet';
+    el.classList.add('placeholder');
+  }
+}
+
+function showJobPanelForField() {
+  if (!selectedFieldName) return;
+  closePanel('field');
+  activateTool('addjob');
+  toggleJobField(selectedFieldName);
+}
+
+// ═══════════════════════════════════════════
+// JOB PANEL
+// ═══════════════════════════════════════════
+function onJobTypeChange() {
+  const type = document.getElementById('job-type').value;
+  const rateGroup = document.getElementById('rate-group');
+  const rateLabel = document.getElementById('rate-label');
+  const cutGroup  = document.getElementById('cut-group');
+  const cattleGG  = document.getElementById('cattle-group-group');
+  const nPreview  = document.getElementById('n-preview');
+
+  rateGroup.style.display  = 'none';
+  cutGroup.style.display   = 'none';
+  cattleGG.style.display   = 'none';
+  nPreview.style.display   = 'none';
+
+  if (type === 'slurry') {
+    rateGroup.style.display = 'block';
+    rateLabel.textContent = 'Volume (gallons per field)';
+    nPreview.style.display = 'block';
+  } else if (type === 'fertiliser') {
+    rateGroup.style.display = 'block';
+    rateLabel.textContent = 'N rate (kg N/ha)';
+    nPreview.style.display = 'block';
+  } else if (type === 'manure') {
+    rateGroup.style.display = 'block';
+    rateLabel.textContent = 'Rate (tonnes/ha)';
+    nPreview.style.display = 'block';
+  } else if (type === 'silage') {
+    cutGroup.style.display = 'block';
+  } else if (type === 'graze-in' || type === 'graze-out') {
+    cattleGG.style.display = 'block';
+    populateCattleSelect();
+  }
+  updateNPreview();
+}
+
+function updateNPreview() {
+  const type = document.getElementById('job-type').value;
+  const rate = parseFloat(document.getElementById('job-rate').value) || 0;
+  let n = 0, txt = '';
+  if (type === 'slurry')     { n = rate * N_FACTORS.slurry; txt = `~${n.toFixed(1)} kg N/ha from slurry`; }
+  if (type === 'fertiliser') { n = rate; txt = `${n} kg N/ha (straight N)`; }
+  if (type === 'manure')     { n = rate * N_FACTORS.manure; txt = `~${n.toFixed(1)} kg N/ha from manure`; }
+  document.getElementById('n-preview-val').textContent = txt || '—';
+}
+
+function toggleJobField(name) {
+  if (jobSelectedFields.has(name)) {
+    jobSelectedFields.delete(name);
+    if (nMapActive) applyNStyle(name);
+    else fieldLayers[name].setStyle(getDefaultStyle());
+  } else {
+    jobSelectedFields.add(name);
+    fieldLayers[name].setStyle(getSelectedStyle());
+  }
+  renderSelectedChips();
+}
+
+function clearJobSelections() {
+  jobSelectedFields.forEach(n => {
+    if (nMapActive) applyNStyle(n);
+    else fieldLayers[n].setStyle(getDefaultStyle());
+  });
+  jobSelectedFields.clear();
+  renderSelectedChips();
+}
+
+function renderSelectedChips() {
+  const list = document.getElementById('selected-fields-list');
+  if (jobSelectedFields.size === 0) {
+    list.innerHTML = '<span style="font-size:11px;color:var(--text-muted)">No fields selected yet</span>';
+    return;
+  }
+  list.innerHTML = [...jobSelectedFields].map(n =>
+    `<span class="field-chip" onclick="toggleJobField('${n.replace(/'/g,"\\'")}')">
+      ${n} <span>✕</span>
+    </span>`
+  ).join('');
+}
+
+function populateCattleSelect() {
+  const sel = document.getElementById('job-cattle-group');
+  sel.innerHTML = '<option value="">Select group…</option>' +
+    cattleGroups.map(g => `<option value="${g.name}">${g.name}</option>`).join('');
+}
+
+function saveJob() {
+  if (jobSelectedFields.size === 0) { showToast('Select at least one field first'); return; }
+  const type = document.getElementById('job-type').value;
+  const date = document.getElementById('job-date').value;
+  if (!type) { showToast('Please select a job type'); return; }
+  if (!date) { showToast('Please enter a date'); return; }
+
+  const rate  = parseFloat(document.getElementById('job-rate').value) || 0;
+  const cut   = document.getElementById('job-cut').value;
+  const notes = document.getElementById('job-notes').value;
+
+  jobSelectedFields.forEach(name => {
+    const d = fieldData[name];
+    if (type === 'slurry')     d.slurry.push({ date, gallons: rate, notes });
+    if (type === 'fertiliser') d.fertiliser.push({ date, kgNha: rate, notes });
+    if (type === 'manure')     d.manure.push({ date, tha: rate, notes });
+    if (type === 'silage')     d.silage.push({ date, cut: parseInt(cut), notes });
+    if (type === 'graze-in')   d.graze.push({ date, type: 'in', notes });
+    if (type === 'graze-out')  d.graze.push({ date, type: 'out', notes });
+  });
+
+  showToast(`Job saved to ${jobSelectedFields.size} field${jobSelectedFields.size > 1 ? 's' : ''}`);
+  clearJobSelections();
+  document.getElementById('job-type').value = '';
+  document.getElementById('job-rate').value = '';
+  document.getElementById('job-notes').value = '';
+  onJobTypeChange();
+  if (nMapActive) Object.keys(fieldLayers).forEach(applyNStyle);
+}
+
+// ═══════════════════════════════════════════
+// NITROGEN CALCULATION
+// ═══════════════════════════════════════════
+function calcTotalN(name) {
+  const d = fieldData[name];
+  const fromSlurry     = d.slurry.reduce((s, j) => s + j.gallons * N_FACTORS.slurry, 0);
+  const fromFertiliser = d.fertiliser.reduce((s, j) => s + j.kgNha, 0);
+  const fromManure     = d.manure.reduce((s, j) => s + j.tha * N_FACTORS.manure, 0);
+  return fromSlurry + fromFertiliser + fromManure;
+}
+
+// ═══════════════════════════════════════════
+// SEASON TABLE
+// ═══════════════════════════════════════════
+function buildSeasonTable() {
+  const tbody = document.getElementById('season-tbody');
+  const tfoot = document.getElementById('season-tfoot');
+  let totSlurry = 0, totFertN = 0, totManure = 0, totCuts = 0, totGraze = 0, totN = 0;
+
+  tbody.innerHTML = Object.keys(fieldData).map(name => {
+    const d = fieldData[name];
+    const slurry  = d.slurry.reduce((s, j) => s + j.gallons, 0);
+    const fertN   = d.fertiliser.reduce((s, j) => s + j.kgNha, 0);
+    const manure  = d.manure.reduce((s, j) => s + j.tha, 0);
+    const cuts    = d.silage.length;
+    const graze   = d.graze.filter(g => g.type === 'in').length;
+    const n       = calcTotalN(name);
+    totSlurry += slurry; totFertN += fertN; totManure += manure; totCuts += cuts; totGraze += graze; totN += n;
+    const nClass  = n === 0 ? '' : n < 80 ? 'low' : n < 150 ? 'mid' : 'high';
+    return `<tr>
+      <td>${name}</td>
+      <td>${slurry ? slurry.toLocaleString() : '—'}</td>
+      <td>${fertN ? fertN : '—'}</td>
+      <td>${manure ? manure : '—'}</td>
+      <td>${cuts || '—'}</td>
+      <td>${graze || '—'}</td>
+      <td class="td-n ${nClass}">${n ? n.toFixed(0) : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  tfoot.innerHTML = `<tr>
+    <td>FARM TOTAL</td>
+    <td>${totSlurry ? totSlurry.toLocaleString() : '—'}</td>
+    <td>${totFertN ? totFertN.toFixed(0) : '—'}</td>
+    <td>${totManure ? totManure.toFixed(1) : '—'}</td>
+    <td>${totCuts || '—'}</td>
+    <td>${totGraze || '—'}</td>
+    <td class="td-n">${totN ? totN.toFixed(0) : '—'}</td>
+  </tr>`;
+}
+
+// ═══════════════════════════════════════════
+// CATTLE PANEL
+// ═══════════════════════════════════════════
+function renderCattlePanel() {
+  const list = document.getElementById('cattle-groups-list');
+  if (cattleGroups.length === 0) {
+    list.innerHTML = '<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">No cattle groups yet. Add one below.</p>';
+    return;
+  }
+  list.innerHTML = cattleGroups.map((g, i) => {
+    const days = g.movedIn ? Math.floor((Date.now() - new Date(g.movedIn)) / 86400000) : null;
+    return `<div class="cattle-group-card">
+      <div class="cattle-group-name">${g.name}</div>
+      <div class="cattle-group-detail">
+        ${g.detail || '—'}<br>
+        ${g.fieldName ? `In: <strong style="color:var(--cream)">${g.fieldName}</strong> · ${days}d` : 'Not in a field'}
+      </div>
+      <div class="cattle-group-actions">
+        <button class="cattle-btn" onclick="moveCattleGroup(${i})">Move</button>
+        <button class="cattle-btn" onclick="editCattleGroup(${i})">Edit</button>
+        <button class="cattle-btn" onclick="deleteCattleGroup(${i})">Remove</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function addCattleGroup() {
+  const name = prompt('Group name (e.g. "Milkers A"):');
+  if (!name) return;
+  const detail = prompt('Details (e.g. "80 cows"):') || '';
+  cattleGroups.push({ name, detail, fieldName: null, movedIn: null });
+  renderCattlePanel();
+}
+
+function moveCattleGroup(i) {
+  const g = cattleGroups[i];
+  const fields = Object.keys(fieldData);
+  const field = prompt(`Move "${g.name}" to which field?\n\nFields:\n${fields.join('\n')}`);
+  if (!field || !fieldData[field]) { showToast('Field not found'); return; }
+  g.fieldName = field;
+  g.movedIn = new Date().toISOString().split('T')[0];
+  renderCattlePanel();
+  showToast(`${g.name} moved to ${field}`);
+}
+
+function editCattleGroup(i) {
+  const g = cattleGroups[i];
+  const name = prompt('Group name:', g.name);
+  if (!name) return;
+  g.name = name;
+  g.detail = prompt('Details:', g.detail) || g.detail;
+  renderCattlePanel();
+}
+
+function deleteCattleGroup(i) {
+  if (!confirm(`Remove "${cattleGroups[i].name}"?`)) return;
+  cattleGroups.splice(i, 1);
+  renderCattlePanel();
+}
+
+// ═══════════════════════════════════════════
+// CLOSE PANELS
+// ═══════════════════════════════════════════
+function closePanel(which) {
+  if (which === 'field') { document.getElementById('field-panel').classList.remove('open'); selectedFieldName = null; }
+  if (which === 'job')   { document.getElementById('job-panel').classList.remove('open'); clearJobSelections(); document.body.classList.remove('select-mode'); document.getElementById('select-banner').classList.remove('visible'); if (currentTool === 'addjob') { currentTool = null; document.getElementById('btn-addjob').classList.remove('active'); } }
+  if (which === 'season') { document.getElementById('season-overlay').classList.remove('open'); if (currentTool === 'season') { currentTool = null; document.getElementById('btn-season').classList.remove('active'); } }
+  if (which === 'cattle') { document.getElementById('cattle-panel').classList.remove('open'); if (currentTool === 'cattle') { currentTool = null; document.getElementById('btn-cattle').classList.remove('active'); } }
+}
+
+// ═══════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// Initialise today's date in job form
+document.getElementById('job-date').valueAsDate = new Date();
+</script>
+</body>
+</html>
